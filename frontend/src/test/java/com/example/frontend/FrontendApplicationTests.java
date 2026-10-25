@@ -10,6 +10,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.flash;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -28,5 +30,13 @@ class FrontendApplicationTests {
             .andExpect(status().isOk())
             .andExpect(content().string(containsString("indisponible")))
             .andExpect(content().string(containsString("swagger-ui.html")));
+    }
+
+    @Test
+    void userDetailRedirectsWhenUserServiceIsDown() throws Exception {
+        mvc.perform(get("/users/1"))
+            .andExpect(status().is3xxRedirection())
+            .andExpect(redirectedUrl("/"))
+            .andExpect(flash().attribute("error", "user-service indisponible"));
     }
 }

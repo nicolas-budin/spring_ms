@@ -23,7 +23,8 @@
 </section>
 
 <section>
-    <h2>Utilisateurs <small>(user-service)</small></h2>
+    <h2>Utilisateurs <small class="badge">(user-service)</small></h2>
+    <div class="table-wrap">
     <table>
         <thead><tr><th>#</th><th>Nom</th><th>Email</th><th>Créé le</th></tr></thead>
         <tbody>
@@ -33,13 +34,15 @@
             <td th:text="${u.email}"></td>
             <td th:text="${#temporals.format(u.createdAt, 'dd/MM/yyyy HH:mm:ss')}"></td>
         </tr>
-        <tr th:if="${#lists.isEmpty(users)}"><td colspan="4">Aucun utilisateur</td></tr>
+        <tr th:if="${#lists.isEmpty(users)}"><td class="empty" colspan="4">Aucun utilisateur</td></tr>
         </tbody>
     </table>
+    </div>
 </section>
 
 <section>
-    <h2>Notifications <small>(notification-service)</small></h2>
+    <h2>Notifications <small class="badge">(notification-service)</small></h2>
+    <div class="table-wrap">
     <table>
         <thead><tr><th>#</th><th>Utilisateur</th><th>Email</th><th>Message</th><th>Date</th></tr></thead>
         <tbody>
@@ -50,9 +53,10 @@
             <td th:text="${n.message}"></td>
             <td th:text="${#temporals.format(n.createdAt, 'dd/MM/yyyy HH:mm:ss')}"></td>
         </tr>
-        <tr th:if="${#lists.isEmpty(notifications)}"><td colspan="5">Aucune notification</td></tr>
+        <tr th:if="${#lists.isEmpty(notifications)}"><td class="empty" colspan="5">Aucune notification</td></tr>
         </tbody>
     </table>
+    </div>
 </section>
 
 <footer th:replace="~{fragments/layout :: footer}"></footer>

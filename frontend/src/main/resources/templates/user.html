@@ -8,16 +8,19 @@
 
 <section>
     <h2 th:text="${user.name}">Nom</h2>
-    <p>
-        <span th:text="${user.email}"></span><br>
-        Créé le <span th:text="${#temporals.format(user.createdAt, 'dd/MM/yyyy HH:mm:ss')}"></span><br>
-        Nombre de notifications (gRPC) :
-        <strong th:text="${user.notificationCount != null ? user.notificationCount : 'indisponible'}"></strong>
-    </p>
+    <dl class="details">
+        <dt>Email</dt>
+        <dd th:text="${user.email}"></dd>
+        <dt>Créé le</dt>
+        <dd th:text="${#temporals.format(user.createdAt, 'dd/MM/yyyy HH:mm:ss')}"></dd>
+        <dt>Notifications (gRPC)</dt>
+        <dd><strong th:text="${user.notificationCount != null ? user.notificationCount : 'indisponible'}"></strong></dd>
+    </dl>
 </section>
 
 <section>
-    <h2>Notifications <small>(notification-service)</small></h2>
+    <h2>Notifications <small class="badge">(notification-service)</small></h2>
+    <div class="table-wrap">
     <table>
         <thead><tr><th>#</th><th>Message</th><th>Date</th></tr></thead>
         <tbody>
@@ -26,9 +29,10 @@
             <td th:text="${n.message}"></td>
             <td th:text="${#temporals.format(n.createdAt, 'dd/MM/yyyy HH:mm:ss')}"></td>
         </tr>
-        <tr th:if="${#lists.isEmpty(notifications)}"><td colspan="3">Aucune notification</td></tr>
+        <tr th:if="${#lists.isEmpty(notifications)}"><td class="empty" colspan="3">Aucune notification</td></tr>
         </tbody>
     </table>
+    </div>
     <p><a th:href="@{/}">← Retour</a></p>
 </section>
 

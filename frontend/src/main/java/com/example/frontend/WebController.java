@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
@@ -74,8 +75,19 @@ public class WebController {
     }
 
     @GetMapping("/users/{id}")
-    String userDetail(@PathVariable Long id, Model model) {
-        model.addAttribute("user", users.findById(id));
+    String userDetail(@PathVariable Long id, Model model, RedirectAttributes redirect) {
+        try {
+            model.addAttribute("user", users.findById(id));
+        }
+        catch (HttpClientErrorException.NotFound ex) {
+            redirect.addFlashAttribute("error", "Utilisateur " + id + " introuvable");
+            return "redirect:/";
+        }
+        catch (RestClientException ex) {
+            log.warn("Appel à user-service impossible : {}", ex.getMessage());
+            redirect.addFlashAttribute("error", "user-service indisponible");
+            return "redirect:/";
+        }
         model.addAttribute("notifications", call(() -> notifications.findByUser(id), model, "notification-service"));
         return "user";
     }
