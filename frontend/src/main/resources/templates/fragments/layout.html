@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:fragment="head(title)">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title th:text="${title}">Spring MS</title>
+    <style>
+        body { font-family: system-ui, sans-serif; margin: 0 auto; max-width: 960px; padding: 1rem; color: #222; }
+        h1 a { color: inherit; text-decoration: none; }
+        section { margin-bottom: 2rem; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border-bottom: 1px solid #ddd; padding: .4rem; text-align: left; }
+        form { display: flex; flex-wrap: wrap; gap: .5rem; align-items: flex-start; }
+        input { padding: .4rem; }
+        .field-error { color: #b00020; font-size: .85rem; display: block; }
+        .alert { padding: .6rem; border-radius: 4px; margin-bottom: 1rem; }
+        .alert.success { background: #e6f4ea; }
+        .alert.error { background: #fdecea; }
+        footer { border-top: 1px solid #ddd; padding-top: .5rem; font-size: .9rem; color: #555; }
+    </style>
+</head>
+<body>
+<header th:fragment="header">
+    <h1><a th:href="@{/}">Spring MS</a></h1>
+</header>
+<footer th:fragment="footer">
+    API REST documentées (Swagger) :
+    <a th:href="${services.user.swaggerUrl}" target="_blank">user-service</a> ·
+    <a th:href="${services.notification.swaggerUrl}" target="_blank">notification-service</a>
+</footer>
+</body>
+</html>

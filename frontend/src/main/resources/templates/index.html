@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Utilisateurs')}"></head>
+<body>
+<header th:replace="~{fragments/layout :: header}"></header>
+
+<div class="alert success" th:if="${success}" th:text="${success}"></div>
+<div class="alert error" th:if="${error}" th:text="${error}"></div>
+
+<section>
+    <h2>Nouvel utilisateur</h2>
+    <form th:action="@{/users}" th:object="${user}" method="post">
+        <label>
+            <input th:field="*{name}" placeholder="Nom">
+            <span class="field-error" th:if="${#fields.hasErrors('name')}" th:errors="*{name}"></span>
+        </label>
+        <label>
+            <input th:field="*{email}" placeholder="Email">
+            <span class="field-error" th:if="${#fields.hasErrors('email')}" th:errors="*{email}"></span>
+        </label>
+        <button type="submit">Créer</button>
+    </form>
+</section>
+
+<section>
+    <h2>Utilisateurs <small>(user-service)</small></h2>
+    <table>
+        <thead><tr><th>#</th><th>Nom</th><th>Email</th><th>Créé le</th></tr></thead>
+        <tbody>
+        <tr th:each="u : ${users}">
+            <td th:text="${u.id}"></td>
+            <td><a th:href="@{/users/{id}(id=${u.id})}" th:text="${u.name}"></a></td>
+            <td th:text="${u.email}"></td>
+            <td th:text="${#temporals.format(u.createdAt, 'dd/MM/yyyy HH:mm:ss')}"></td>
+        </tr>
+        <tr th:if="${#lists.isEmpty(users)}"><td colspan="4">Aucun utilisateur</td></tr>
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>Notifications <small>(notification-service)</small></h2>
+    <table>
+        <thead><tr><th>#</th><th>Utilisateur</th><th>Email</th><th>Message</th><th>Date</th></tr></thead>
+        <tbody>
+        <tr th:each="n : ${notifications}">
+            <td th:text="${n.id}"></td>
+            <td th:text="${n.userId}"></td>
+            <td th:text="${n.email}"></td>
+            <td th:text="${n.message}"></td>
+            <td th:text="${#temporals.format(n.createdAt, 'dd/MM/yyyy HH:mm:ss')}"></td>
+        </tr>
+        <tr th:if="${#lists.isEmpty(notifications)}"><td colspan="5">Aucune notification</td></tr>
+        </tbody>
+    </table>
+</section>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+</body>
+</html>

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head(${user.name})}"></head>
+<body>
+<header th:replace="~{fragments/layout :: header}"></header>
+
+<div class="alert error" th:if="${error}" th:text="${error}"></div>
+
+<section>
+    <h2 th:text="${user.name}">Nom</h2>
+    <p>
+        <span th:text="${user.email}"></span><br>
+        Créé le <span th:text="${#temporals.format(user.createdAt, 'dd/MM/yyyy HH:mm:ss')}"></span><br>
+        Nombre de notifications (gRPC) :
+        <strong th:text="${user.notificationCount != null ? user.notificationCount : 'indisponible'}"></strong>
+    </p>
+</section>
+
+<section>
+    <h2>Notifications <small>(notification-service)</small></h2>
+    <table>
+        <thead><tr><th>#</th><th>Message</th><th>Date</th></tr></thead>
+        <tbody>
+        <tr th:each="n : ${notifications}">
+            <td th:text="${n.id}"></td>
+            <td th:text="${n.message}"></td>
+            <td th:text="${#temporals.format(n.createdAt, 'dd/MM/yyyy HH:mm:ss')}"></td>
+        </tr>
+        <tr th:if="${#lists.isEmpty(notifications)}"><td colspan="3">Aucune notification</td></tr>
+        </tbody>
+    </table>
+    <p><a th:href="@{/}">← Retour</a></p>
+</section>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+</body>
+</html>

@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.example.grpc.notification";
+option java_outer_classname = "NotificationProto";
+
+package notification;
+
+// Service exposé par notification-service, consommé par user-service.
+service NotificationService {
+  rpc SendNotification (SendNotificationRequest) returns (SendNotificationResponse);
+  rpc CountNotifications (CountNotificationsRequest) returns (CountNotificationsResponse);
+}
+
+message SendNotificationRequest {
+  int64 user_id = 1;
+  string email = 2;
+  string message = 3;
+}
+
+message SendNotificationResponse {
+  int64 notification_id = 1;
+  string status = 2;
+}
+
+message CountNotificationsRequest {
+  int64 user_id = 1;
+}
+
+message CountNotificationsResponse {
+  int64 count = 1;
+}

@@ -1,0 +1,37 @@
+services:
+  notification-service:
+    build:
+      context: .
+      dockerfile: notification-service/Dockerfile
+    ports:
+      - "8082:8082" # REST + Swagger
+      - "9090:9090" # gRPC
+
+  user-service:
+    build:
+      context: .
+      dockerfile: user-service/Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_GRPC_CLIENT_CHANNEL_NOTIFICATION_TARGET: static://notification-service:9090
+    depends_on:
+      - notification-service
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      # 8080 est souvent déjà pris (ex. Keycloak) : port hôte surchargeable via FRONTEND_PORT
+      - "${FRONTEND_PORT:-8088}:8080"
+    environment:
+      # Appels serveur à serveur : noms DNS du réseau compose
+      SERVICES_USER_URL: http://user-service:8081
+      SERVICES_NOTIFICATION_URL: http://notification-service:8082
+      # Liens Swagger affichés dans le navigateur : ports publiés sur l'hôte
+      SERVICES_USER_SWAGGERURL: http://localhost:8081/swagger-ui.html
+      SERVICES_NOTIFICATION_SWAGGERURL: http://localhost:8082/swagger-ui.html
+    depends_on:
+      - user-service
+      - notification-service

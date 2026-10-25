@@ -1,0 +1,14 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: frontend
+
+services:
+  user:
+    url: http://localhost:8081
+    swagger-url: http://localhost:8081/swagger-ui.html
+  notification:
+    url: http://localhost:8082
+    swagger-url: http://localhost:8082/swagger-ui.html
