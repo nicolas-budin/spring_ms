@@ -2,6 +2,8 @@
 
 28 octobre 2026 · Statut : implémenté.
 
+Pour comprendre le code, lire [RabbitMQ expliqué pas à pas](rabbitmq-explique.md).
+
 ## Contexte
 
 RabbitMQ s'ajoute **en plus de gRPC** : les flux gRPC actuels (notification de bienvenue et comptage) ne changent pas.

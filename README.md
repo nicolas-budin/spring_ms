@@ -31,7 +31,8 @@ message attend dans la file et il est traité au redémarrage. La console Rabbit
 (`guest` / `guest`).
 
 Documentation complémentaire : [DOCKER.md](DOCKER.md) (lancer / arrêter les services) et le dossier [docs/](docs/)
-(notamment le [plan d'observabilité](docs/plan-observabilite.md) et le [plan RabbitMQ](docs/plan-rabbitmq.md)).
+(notamment le [plan d'observabilité](docs/plan-observabilite.md), le [plan RabbitMQ](docs/plan-rabbitmq.md) et
+[RabbitMQ expliqué pas à pas](docs/rabbitmq-explique.md)).
 
 ## Lancer en local
 
