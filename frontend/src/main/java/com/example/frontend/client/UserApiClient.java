@@ -31,4 +31,8 @@ public class UserApiClient {
     public UserDto create(CreateUserRequest request) {
         return restClient.post().uri("/api/users").body(request).retrieve().body(UserDto.class);
     }
+
+    public void delete(Long id) {
+        restClient.delete().uri("/api/users/{id}", id).retrieve().toBodilessEntity();
+    }
 }

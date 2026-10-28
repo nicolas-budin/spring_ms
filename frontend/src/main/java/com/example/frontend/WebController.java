@@ -74,6 +74,21 @@ public class WebController {
         return "redirect:/";
     }
 
+    @PostMapping("/users/{id}/delete")
+    String deleteUser(@PathVariable Long id, RedirectAttributes redirect) {
+        try {
+            users.delete(id);
+            redirect.addFlashAttribute("success", "Utilisateur " + id + " supprimé");
+        }
+        catch (RestClientResponseException ex) {
+            redirect.addFlashAttribute("error", "Suppression refusée (" + ex.getStatusCode().value() + ")");
+        }
+        catch (RestClientException ex) {
+            redirect.addFlashAttribute("error", "user-service indisponible");
+        }
+        return "redirect:/";
+    }
+
     @GetMapping("/users/{id}")
     String userDetail(@PathVariable Long id, Model model, RedirectAttributes redirect) {
         try {

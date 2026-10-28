@@ -139,6 +139,16 @@ button:hover {
     background: var(--accent-hover);
 }
 
+button.danger {
+    background: transparent;
+    color: var(--error);
+    border: 1px solid var(--error);
+}
+
+button.danger:hover {
+    background: rgb(248 113 113 / 15%);
+}
+
 .field-error {
     display: block;
     margin-top: 4px;

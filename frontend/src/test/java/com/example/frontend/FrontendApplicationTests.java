@@ -9,6 +9,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.flash;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
@@ -35,6 +36,14 @@ class FrontendApplicationTests {
     @Test
     void userDetailRedirectsWhenUserServiceIsDown() throws Exception {
         mvc.perform(get("/users/1"))
+            .andExpect(status().is3xxRedirection())
+            .andExpect(redirectedUrl("/"))
+            .andExpect(flash().attribute("error", "user-service indisponible"));
+    }
+
+    @Test
+    void deleteUserRedirectsWhenUserServiceIsDown() throws Exception {
+        mvc.perform(post("/users/1/delete"))
             .andExpect(status().is3xxRedirection())
             .andExpect(redirectedUrl("/"))
             .andExpect(flash().attribute("error", "user-service indisponible"));

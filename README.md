@@ -5,11 +5,14 @@ Exemple de 3 microservices Spring Boot 4.1 (Java 25) :
 | Service | Rôle | Ports |
 |---|---|---|
 | `frontend` | UI Thymeleaf, appelle les 2 backends en **REST** (`RestClient`) | 8080 |
-| `user-service` | API REST utilisateurs (H2/JPA), **client gRPC** de notification-service | 8081 |
-| `notification-service` | **Serveur gRPC** + API REST de consultation (H2/JPA) | 8082 (REST), 9090 (gRPC) |
+| `user-service` | API REST utilisateurs (H2/JPA), **client gRPC** de notification-service, **publie** dans RabbitMQ | 8081 |
+| `notification-service` | **Serveur gRPC** + API REST de consultation (H2/JPA), **consomme** RabbitMQ | 8082 (REST), 9090 (gRPC) |
+| `rabbitmq` | Broker de messages | 5672 (AMQP), 15672 (console) |
 
 ```
 frontend ──REST──► user-service ──gRPC──► notification-service
+    │                   │                        ▲
+    │                   └──► RabbitMQ ───────────┘  (user.deleted, asynchrone)
     └──────────────────REST──────────────────────┘
 ```
 
@@ -21,10 +24,18 @@ les stubs Java sont générés au build dans le module `grpc-api`.
 Si notification-service est indisponible, l'utilisateur est quand même créé
 (`notificationCount` vaut `null`) et l'erreur est journalisée.
 
+`DELETE /api/users/{id}` (bouton « Supprimer » sur la page d'un utilisateur) passe par **RabbitMQ** :
+user-service publie un événement `user.deleted` sur l'exchange `users`, et notification-service le lit dans la file
+`notification.user-deleted` puis efface les notifications de l'utilisateur. Si notification-service est arrêté, le
+message attend dans la file et il est traité au redémarrage. La console RabbitMQ est sur http://localhost:15672
+(`guest` / `guest`).
+
 Documentation complémentaire : [DOCKER.md](DOCKER.md) (lancer / arrêter les services) et le dossier [docs/](docs/)
-(notamment le [plan d'observabilité](docs/plan-observabilite.md)).
+(notamment le [plan d'observabilité](docs/plan-observabilite.md) et le [plan RabbitMQ](docs/plan-rabbitmq.md)).
 
 ## Lancer en local
+
+RabbitMQ doit tourner sur `localhost:5672`, par exemple : `docker compose up -d rabbitmq`.
 
 ```bash
 mvn clean install
@@ -63,8 +74,9 @@ Grafana les affiche. Les deux sont lancés par `docker compose up -d`.
 | Métriques brutes d'un service | http://localhost:8081/actuator/prometheus (8082 pour notification-service, 8088 pour le front dans Docker) |
 | Santé d'un service | http://localhost:8081/actuator/health |
 
-Le dashboard tient en 5 panneaux : l'état UP/DOWN des services, le débit et la latence p95 des requêtes REST (les
-erreurs apparaissent via le code HTTP), le débit et la latence p95 des appels gRPC. Un filtre
+Le dashboard tient en 6 panneaux : l'état UP/DOWN des services, le débit et la latence p95 des requêtes REST (les
+erreurs apparaissent via le code HTTP), le débit et la latence p95 des appels gRPC, et les messages RabbitMQ publiés et
+consommés. Un filtre
 « Service » en haut permet de n'afficher qu'un service. Toutes ces métriques sont fournies automatiquement par
 Spring Boot : le code ne contient aucun compteur. Une panne de notification-service se voit dans le panneau des appels
 gRPC côté client (statut `UNAVAILABLE`).

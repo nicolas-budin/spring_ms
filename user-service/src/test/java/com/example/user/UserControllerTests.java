@@ -8,10 +8,12 @@ import com.example.grpc.notification.CountNotificationsResponse;
 import com.example.grpc.notification.NotificationServiceGrpc;
 import com.example.grpc.notification.SendNotificationRequest;
 import com.example.grpc.notification.SendNotificationResponse;
+import com.example.user.messaging.UserDeletedEvent;
 import io.grpc.stub.StreamObserver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.grpc.test.autoconfigure.AutoConfigureTestGrpcTransport;
 import org.springframework.boot.micrometer.metrics.test.autoconfigure.AutoConfigureMetrics;
@@ -20,10 +22,15 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -32,7 +39,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Vérifie l'API REST et l'appel gRPC sortant, en remplaçant notification-service par un faux service
- * gRPC exposé sur un transport in-process.
+ * gRPC exposé sur un transport in-process. RabbitMQ est remplacé par un mock de {@link RabbitTemplate}.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -45,6 +52,9 @@ class UserControllerTests {
 
     @Autowired
     private FakeNotificationService notifications;
+
+    @MockitoBean
+    private RabbitTemplate rabbitTemplate;
 
     @BeforeEach
     void resetNotifications() {
@@ -66,6 +76,27 @@ class UserControllerTests {
         mvc.perform(get("/api/users/{id}", notifications.received.getFirst().getUserId()))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.notificationCount").value(1));
+    }
+
+    @Test
+    void deleteUserPublishesEvent() throws Exception {
+        mvc.perform(post("/api/users").contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"name": "Carol", "email": "carol@example.com"}"""))
+            .andExpect(status().isCreated());
+        long id = notifications.received.getFirst().getUserId();
+
+        mvc.perform(delete("/api/users/{id}", id)).andExpect(status().isNoContent());
+
+        verify(rabbitTemplate).convertAndSend("users", "user.deleted", new UserDeletedEvent(id));
+        mvc.perform(get("/api/users/{id}", id)).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void deleteUnknownUserReturns404() throws Exception {
+        mvc.perform(delete("/api/users/{id}", 9999)).andExpect(status().isNotFound());
+
+        verify(rabbitTemplate, never()).convertAndSend(any(String.class), any(String.class), any(Object.class));
     }
 
     @Test

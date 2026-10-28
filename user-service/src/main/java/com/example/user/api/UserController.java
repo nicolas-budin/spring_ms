@@ -6,6 +6,7 @@ import java.util.List;
 import com.example.user.User;
 import com.example.user.UserRepository;
 import com.example.user.grpc.NotificationClient;
+import com.example.user.messaging.UserEventPublisher;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -14,6 +15,7 @@ import jakarta.validation.Valid;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -31,9 +33,13 @@ public class UserController {
 
     private final NotificationClient notificationClient;
 
-    public UserController(UserRepository repository, NotificationClient notificationClient) {
+    private final UserEventPublisher events;
+
+    public UserController(UserRepository repository, NotificationClient notificationClient,
+            UserEventPublisher events) {
         this.repository = repository;
         this.notificationClient = notificationClient;
+        this.events = events;
     }
 
     @GetMapping
@@ -71,5 +77,21 @@ public class UserController {
         boolean sent = notificationClient.sendWelcome(user);
         return ResponseEntity.created(URI.create("/api/users/" + user.getId()))
             .body(UserResponse.from(user, sent ? 1L : null));
+    }
+
+    @DeleteMapping("/{id}")
+    @Operation(summary = "Supprimer un utilisateur",
+            description = "Supprime l'utilisateur puis publie l'événement user.deleted dans RabbitMQ : "
+                    + "notification-service supprime alors ses notifications")
+    @ApiResponse(responseCode = "204", description = "Utilisateur supprimé")
+    @ApiResponse(responseCode = "404", description = "Utilisateur inconnu")
+    public ResponseEntity<Void> delete(
+            @Parameter(description = "Identifiant de l'utilisateur", example = "1") @PathVariable Long id) {
+        if (!repository.existsById(id)) {
+            return ResponseEntity.notFound().build();
+        }
+        repository.deleteById(id);
+        events.userDeleted(id);
+        return ResponseEntity.noContent().build();
     }
 }

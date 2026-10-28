@@ -16,6 +16,10 @@
         <dt>Notifications (gRPC)</dt>
         <dd><strong th:text="${user.notificationCount != null ? user.notificationCount : 'indisponible'}"></strong></dd>
     </dl>
+    <form th:action="@{/users/{id}/delete(id=${user.id})}" method="post"
+          onsubmit="return confirm('Supprimer cet utilisateur et ses notifications ?')">
+        <button type="submit" class="danger">Supprimer</button>
+    </form>
 </section>
 
 <section>

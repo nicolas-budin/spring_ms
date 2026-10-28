@@ -9,6 +9,7 @@ Toutes les commandes se lancent depuis la racine du projet.
 | frontend | 8088 (modifiable avec `FRONTEND_PORT`) | 8080 |
 | user-service | 8081 | 8081 |
 | notification-service | 8082 (REST), 9090 (gRPC) | 8082, 9090 |
+| RabbitMQ | 5672 (AMQP), 15672 (console, `guest` / `guest`) | 5672, 15672 |
 | Prometheus | 9091 | — |
 | Grafana | 3000 | — |
 

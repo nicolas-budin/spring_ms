@@ -16,7 +16,7 @@ import org.springframework.grpc.client.GrpcChannelFactory;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
-@SpringBootTest
+@SpringBootTest(properties = "spring.rabbitmq.listener.simple.auto-startup=false")
 @AutoConfigureTestGrpcTransport
 class NotificationGrpcServiceTests {
 

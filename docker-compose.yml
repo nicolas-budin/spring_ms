@@ -1,4 +1,15 @@
 services:
+  rabbitmq:
+    image: rabbitmq:4.3.7-management
+    ports:
+      - "5672:5672"   # AMQP
+      - "15672:15672" # console web (guest/guest)
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   notification-service:
     build:
       context: .
@@ -6,6 +17,11 @@ services:
     ports:
       - "8082:8082" # REST + Swagger
       - "9090:9090" # gRPC
+    environment:
+      SPRING_RABBITMQ_HOST: rabbitmq
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
 
   user-service:
     build:
@@ -15,8 +31,12 @@ services:
       - "8081:8081"
     environment:
       SPRING_GRPC_CLIENT_CHANNEL_NOTIFICATION_TARGET: static://notification-service:9090
+      SPRING_RABBITMQ_HOST: rabbitmq
     depends_on:
-      - notification-service
+      rabbitmq:
+        condition: service_healthy
+      notification-service:
+        condition: service_started
 
   frontend:
     build:

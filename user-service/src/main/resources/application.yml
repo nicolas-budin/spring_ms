@@ -18,6 +18,13 @@ spring:
   mvc:
     problemdetails:
       enabled: true
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+    template:
+      observation-enabled: true
   grpc:
     client:
       channel:
