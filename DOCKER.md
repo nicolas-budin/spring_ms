@@ -12,6 +12,9 @@ Toutes les commandes se lancent depuis la racine du projet.
 | RabbitMQ | 5672 (AMQP), 15672 (console, `guest` / `guest`) | 5672, 15672 |
 | Prometheus | 9091 | — |
 | Grafana | 3000 | — |
+| OpenSearch | 9200 | — |
+| OpenSearch Dashboards | 5601 | — |
+| Fluent Bit (réception des logs) | 24224 | — |
 
 Dans Docker, le front est publié sur 8088 et non sur 8080, parce que 8080 est souvent déjà pris (par Keycloak, par exemple).
 Pour choisir un autre port : `FRONTEND_PORT=9000 docker compose up -d`.
@@ -49,7 +52,7 @@ des métriques de Prometheus.
 ```bash
 docker compose ps                         # état des conteneurs
 docker compose logs -f                    # logs des 3 services
-docker compose logs -f user-service       # logs d'un seul service
+docker compose logs -f user-service       # logs d'un seul service (en JSON dans Docker ; plus lisible dans OpenSearch Dashboards)
 docker compose restart user-service       # redémarrer un seul service
 docker compose up -d --build --no-deps frontend   # reconstruire et relancer un seul service, sans redémarrer les autres
 ```

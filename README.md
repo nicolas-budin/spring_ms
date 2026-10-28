@@ -31,8 +31,8 @@ message attend dans la file et il est traité au redémarrage. La console Rabbit
 (`guest` / `guest`).
 
 Documentation complémentaire : [DOCKER.md](DOCKER.md) (lancer / arrêter les services) et le dossier [docs/](docs/)
-(notamment le [plan d'observabilité](docs/plan-observabilite.md), le [plan RabbitMQ](docs/plan-rabbitmq.md) et
-[RabbitMQ expliqué pas à pas](docs/rabbitmq-explique.md)).
+(notamment le [plan d'observabilité](docs/plan-observabilite.md), le [plan RabbitMQ](docs/plan-rabbitmq.md),
+[RabbitMQ expliqué pas à pas](docs/rabbitmq-explique.md) et le [plan OpenSearch](docs/plan-opensearch.md)).
 
 ## Lancer en local
 
@@ -85,6 +85,35 @@ gRPC côté client (statut `UNAVAILABLE`).
 La configuration est dans [observability/](observability/). Le dashboard est le fichier
 [spring-ms.json](observability/grafana/dashboards/spring-ms.json) ; une modification faite dans Grafana n'y est pas
 sauvegardée, il faut l'exporter depuis Grafana pour la garder.
+
+## Logs centralisés (OpenSearch)
+
+Dans Docker, les logs des 3 services Spring sont rassemblés dans OpenSearch. Les métriques disent « combien », les
+logs disent « quoi » : quel message, quelle erreur, quel service.
+
+```
+service Spring ──logs JSON──► Fluent Bit ──► OpenSearch ◄── OpenSearch Dashboards
+```
+
+- Chaque service écrit ses logs en JSON au format ECS (`LOGGING_STRUCTURED_FORMAT_CONSOLE=ecs`, uniquement dans
+  Docker : en local, les logs restent lisibles). Aucun code Java n'a changé.
+- Docker transmet ces lignes à **Fluent Bit** (driver de logs `fluentd`), qui les décode et les range dans OpenSearch,
+  un index par jour (`logs-AAAA.MM.JJ`).
+- **OpenSearch Dashboards** sert à les consulter : http://localhost:5601, menu **Discover**. L'index pattern `logs-*`
+  est créé au démarrage par le conteneur `opensearch-init`.
+
+Exemples de recherches dans la barre de Discover (syntaxe DQL) :
+
+| Recherche | Résultat |
+|---|---|
+| `service.name : "user-service"` | les logs d'un seul service |
+| `log.level : "WARN" or log.level : "ERROR"` | les avertissements et les erreurs |
+| `message : "UNAVAILABLE"` | les appels gRPC échoués (notification-service arrêté) |
+| `log.logger : *UserDeletedListener*` | les messages RabbitMQ traités |
+
+Les lignes qui ne viennent pas de Spring (avertissements de la JVM au démarrage) n'ont pas de `service.name` : on les
+retrouve avec `container_name`. La sécurité d'OpenSearch est désactivée (pas de mot de passe) : c'est une
+configuration de développement. La configuration est dans [observability/fluent-bit/](observability/fluent-bit/).
 
 ## Tester le serveur gRPC
 

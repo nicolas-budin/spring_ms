@@ -1,0 +1,7 @@
+parsers:
+  # Logs Spring Boot au format ECS : l'heure du log devient l'heure de l'événement, et OpenSearch la reçoit
+  # dans le champ @timestamp ajouté par la sortie.
+  - name: spring-ecs
+    format: json
+    time_key: '@timestamp'
+    time_format: '%Y-%m-%dT%H:%M:%S.%LZ'

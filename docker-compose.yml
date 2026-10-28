@@ -1,3 +1,12 @@
+# Logs des services Spring : JSON (format ECS) envoyés à Fluent Bit, qui les range dans OpenSearch.
+# "docker compose logs" continue de fonctionner grâce au cache local de Docker.
+x-spring-logging: &spring-logging
+  driver: fluentd
+  options:
+    fluentd-address: localhost:24224
+    fluentd-async: "true" # le service démarre même si Fluent Bit n'est pas encore prêt
+    tag: "{{.Name}}"
+
 services:
   rabbitmq:
     image: rabbitmq:4.3.7-management
@@ -19,6 +28,8 @@ services:
       - "9090:9090" # gRPC
     environment:
       SPRING_RABBITMQ_HOST: rabbitmq
+      LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
+    logging: *spring-logging
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -32,6 +43,8 @@ services:
     environment:
       SPRING_GRPC_CLIENT_CHANNEL_NOTIFICATION_TARGET: static://notification-service:9090
       SPRING_RABBITMQ_HOST: rabbitmq
+      LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
+    logging: *spring-logging
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -52,6 +65,8 @@ services:
       # Liens Swagger affichés dans le navigateur : ports publiés sur l'hôte
       SERVICES_USER_SWAGGERURL: http://localhost:8081/swagger-ui.html
       SERVICES_NOTIFICATION_SWAGGERURL: http://localhost:8082/swagger-ui.html
+      LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
+    logging: *spring-logging
     depends_on:
       - user-service
       - notification-service
@@ -82,3 +97,49 @@ services:
       - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
       - prometheus
+
+  opensearch:
+    image: opensearchproject/opensearch:3.8.0
+    ports:
+      - "9200:9200"
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: "true" # dev uniquement : ni TLS ni mot de passe
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+      OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:3.8.0
+    ports:
+      - "5601:5601"
+    environment:
+      OPENSEARCH_HOSTS: '["http://opensearch:9200"]'
+      DISABLE_SECURITY_DASHBOARDS_PLUGIN: "true"
+    depends_on:
+      opensearch:
+        condition: service_healthy
+
+  # Crée l'index pattern logs-* dans Dashboards, puis s'arrête
+  opensearch-init:
+    image: curlimages/curl:8.22.0
+    entrypoint: ["sh", "/init-dashboards.sh"]
+    volumes:
+      - ./observability/opensearch/init-dashboards.sh:/init-dashboards.sh:ro
+    depends_on:
+      - opensearch-dashboards
+
+  fluent-bit:
+    image: fluent/fluent-bit:5.1.4
+    command: ["-c", "/fluent-bit/etc/fluent-bit.yaml"]
+    ports:
+      - "24224:24224"
+    volumes:
+      - ./observability/fluent-bit:/fluent-bit/etc:ro
+    depends_on:
+      opensearch:
+        condition: service_healthy

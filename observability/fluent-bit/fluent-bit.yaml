@@ -1,0 +1,42 @@
+# Reçoit les logs des conteneurs Spring (driver Docker "fluentd"), décode le JSON ECS et l'envoie à OpenSearch.
+service:
+  flush: 1
+  log_level: info
+  parsers_file: parsers.yaml
+
+pipeline:
+  inputs:
+    - name: forward
+      listen: 0.0.0.0
+      port: 24224
+
+  filters:
+    # Le driver Docker place la ligne brute dans le champ "log". On la renomme, car le JSON ECS contient
+    # lui-même un objet "log" (log.level, log.logger) : les deux types entreraient en conflit dans OpenSearch.
+    - name: modify
+      match: '*'
+      rename: log raw_log
+
+    # Décode la ligne JSON en champs (log.level, service.name, message...) et supprime raw_log.
+    - name: parser
+      match: '*'
+      key_name: raw_log
+      parser: spring-ecs
+      reserve_data: on
+
+    # Lignes qui ne sont pas du JSON (avertissements de la JVM au démarrage) : le texte devient "message".
+    - name: modify
+      match: '*'
+      condition: Key_does_not_exist message
+      rename: raw_log message
+
+  outputs:
+    # Un index par jour : logs-AAAA.MM.JJ
+    - name: opensearch
+      match: '*'
+      host: opensearch
+      port: 9200
+      logstash_format: on
+      logstash_prefix: logs
+      suppress_type_name: on
+      trace_error: on
