@@ -1,0 +1,17 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: spring-ms
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["frontend:8080"]
+        labels:
+          service: frontend
+      - targets: ["user-service:8081"]
+        labels:
+          service: user-service
+      - targets: ["notification-service:8082"]
+        labels:
+          service: notification-service

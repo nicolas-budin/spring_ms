@@ -1,0 +1,9 @@
+apiVersion: 1
+
+providers:
+  - name: spring-ms
+    folder: Spring MS
+    type: file
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards

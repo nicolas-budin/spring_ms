@@ -12,3 +12,18 @@ services:
   notification:
     url: http://localhost:8082
     swagger-url: http://localhost:8082/swagger-ui.html
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        http.client.requests: true
+        grpc.server: true
+        grpc.client: true

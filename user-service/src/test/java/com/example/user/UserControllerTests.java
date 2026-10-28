@@ -9,10 +9,12 @@ import com.example.grpc.notification.NotificationServiceGrpc;
 import com.example.grpc.notification.SendNotificationRequest;
 import com.example.grpc.notification.SendNotificationResponse;
 import io.grpc.stub.StreamObserver;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.grpc.test.autoconfigure.AutoConfigureTestGrpcTransport;
+import org.springframework.boot.micrometer.metrics.test.autoconfigure.AutoConfigureMetrics;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -21,8 +23,10 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -33,6 +37,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @AutoConfigureTestGrpcTransport
+@AutoConfigureMetrics
 class UserControllerTests {
 
     @Autowired
@@ -40,6 +45,11 @@ class UserControllerTests {
 
     @Autowired
     private FakeNotificationService notifications;
+
+    @BeforeEach
+    void resetNotifications() {
+        notifications.received.clear();
+    }
 
     @Test
     void createUserSendsWelcomeNotification() throws Exception {
@@ -72,6 +82,19 @@ class UserControllerTests {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.info.title").value("User Service API"))
             .andExpect(jsonPath("$.paths['/api/users'].post").exists());
+    }
+
+    @Test
+    void prometheusEndpointExposesMetrics() throws Exception {
+        mvc.perform(post("/api/users").contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"name": "Bob", "email": "bob@example.com"}"""))
+            .andExpect(status().isCreated());
+
+        mvc.perform(get("/actuator/prometheus"))
+            .andExpect(status().isOk())
+            .andExpect(content().string(containsString("http_server_requests_seconds_count{application=\"user-service\"")))
+            .andExpect(content().string(containsString("grpc_client_seconds_count{application=\"user-service\"")));
     }
 
     @TestConfiguration

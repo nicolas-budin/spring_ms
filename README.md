@@ -21,6 +21,9 @@ les stubs Java sont générés au build dans le module `grpc-api`.
 Si notification-service est indisponible, l'utilisateur est quand même créé
 (`notificationCount` vaut `null`) et l'erreur est journalisée.
 
+Documentation complémentaire : [DOCKER.md](DOCKER.md) (lancer / arrêter les services) et le dossier [docs/](docs/)
+(notamment le [plan d'observabilité](docs/plan-observabilite.md)).
+
 ## Lancer en local
 
 ```bash
@@ -47,6 +50,28 @@ Pour arrêter, redémarrer ou consulter les logs, voir [DOCKER.md](DOCKER.md).
 |---|---|---|
 | user-service | http://localhost:8081/swagger-ui.html | http://localhost:8081/v3/api-docs |
 | notification-service | http://localhost:8082/swagger-ui.html | http://localhost:8082/v3/api-docs |
+
+## Observabilité (statistiques d'utilisation)
+
+Chaque service expose ses métriques avec Spring Boot Actuator et Micrometer. Prometheus les collecte toutes les 5 s et
+Grafana les affiche. Les deux sont lancés par `docker compose up -d`.
+
+| Outil | URL |
+|---|---|
+| Grafana, dashboard « Spring MS » (lecture sans connexion, `admin` / `admin` pour modifier) | http://localhost:3000 |
+| Prometheus (état des cibles) | http://localhost:9091/targets |
+| Métriques brutes d'un service | http://localhost:8081/actuator/prometheus (8082 pour notification-service, 8088 pour le front dans Docker) |
+| Santé d'un service | http://localhost:8081/actuator/health |
+
+Le dashboard tient en 5 panneaux : l'état UP/DOWN des services, le débit et la latence p95 des requêtes REST (les
+erreurs apparaissent via le code HTTP), le débit et la latence p95 des appels gRPC. Un filtre
+« Service » en haut permet de n'afficher qu'un service. Toutes ces métriques sont fournies automatiquement par
+Spring Boot : le code ne contient aucun compteur. Une panne de notification-service se voit dans le panneau des appels
+gRPC côté client (statut `UNAVAILABLE`).
+
+La configuration est dans [observability/](observability/). Le dashboard est le fichier
+[spring-ms.json](observability/grafana/dashboards/spring-ms.json) ; une modification faite dans Grafana n'y est pas
+sauvegardée, il faut l'exporter depuis Grafana pour la garder.
 
 ## Tester le serveur gRPC
 

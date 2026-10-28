@@ -9,6 +9,8 @@ Toutes les commandes se lancent depuis la racine du projet.
 | frontend | 8088 (modifiable avec `FRONTEND_PORT`) | 8080 |
 | user-service | 8081 | 8081 |
 | notification-service | 8082 (REST), 9090 (gRPC) | 8082, 9090 |
+| Prometheus | 9091 | — |
+| Grafana | 3000 | — |
 
 Dans Docker, le front est publié sur 8088 et non sur 8080, parce que 8080 est souvent déjà pris (par Keycloak, par exemple).
 Pour choisir un autre port : `FRONTEND_PORT=9000 docker compose up -d`.
@@ -29,6 +31,8 @@ Une fois les services démarrés :
 - Front : http://localhost:8088
 - Swagger user-service : http://localhost:8081/swagger-ui.html
 - Swagger notification-service : http://localhost:8082/swagger-ui.html
+- Grafana : http://localhost:3000 (dashboard « Spring MS »)
+- Prometheus : http://localhost:9091
 
 ### Arrêter
 
@@ -36,7 +40,8 @@ Une fois les services démarrés :
 docker compose down
 ```
 
-Les 3 conteneurs sont arrêtés et supprimés. Les bases H2 sont en mémoire : **les données sont perdues à chaque arrêt**.
+Tous les conteneurs (les 3 services, Prometheus et Grafana) sont arrêtés et supprimés. Les bases H2 sont en mémoire : **les données sont perdues à chaque arrêt**, de même que l'historique
+des métriques de Prometheus.
 
 ### Commandes utiles
 
@@ -45,7 +50,7 @@ docker compose ps                         # état des conteneurs
 docker compose logs -f                    # logs des 3 services
 docker compose logs -f user-service       # logs d'un seul service
 docker compose restart user-service       # redémarrer un seul service
-docker compose up -d --build frontend     # reconstruire et relancer un seul service
+docker compose up -d --build --no-deps frontend   # reconstruire et relancer un seul service, sans redémarrer les autres
 ```
 
 ## Sans Docker (jars en local)

@@ -35,3 +35,30 @@ services:
     depends_on:
       - user-service
       - notification-service
+
+  prometheus:
+    image: prom/prometheus:v3.15.1
+    ports:
+      - "9091:9090" # 9090 est déjà pris par le gRPC de notification-service
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - frontend
+      - user-service
+      - notification-service
+
+  grafana:
+    image: grafana/grafana:13.2.5
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/spring-ms.json
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
