@@ -86,6 +86,8 @@ data:
           logstash_prefix: logs
           suppress_type_name: on
           trace_error: on
+          # Réessayer sans limite : au démarrage, OpenSearch n'est pas encore prêt et les logs seraient perdus
+          retry_limit: no_limits
 
   parsers.yaml: |
     parsers:

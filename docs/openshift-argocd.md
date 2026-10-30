@@ -243,6 +243,9 @@ On ne peut pas utiliser `oc scale --replicas=0` pour ce test : *selfHeal* le rem
 | `opensearch` redémarre en boucle | `oc logs deploy/opensearch --previous` : mémoire (limite à 1536 Mi) ou droits sur `/usr/share/opensearch/data` |
 | pas d'index `logs-*` | `oc logs ds/fluent-bit` : connexion à `opensearch:9200`, ou fichiers non trouvés |
 | Discover vide alors que l'index existe | élargir la plage de temps en haut à droite (par exemple « Last 1 hour ») |
+| Discover : `Could not locate that index-pattern-field (id: @timestamp)` | l'index pattern a été créé avant le premier log, donc sans aucun champ. Une fois l'index `logs-*` présent, recharger la page, ou ouvrir **Dashboards Management → Index patterns → logs-\*** et rafraîchir la liste des champs. Le script de préparation attend maintenant le premier log avant de créer l'index pattern. |
+| `fluent-bit` : `Connection refused` puis `cannot be retried` | OpenSearch n'était pas encore prêt. Avec `retry_limit: no_limits`, Fluent Bit réessaie jusqu'à ce qu'il réponde |
+| la configuration de Fluent Bit a changé dans Git, mais rien ne change | un pod ne relit pas sa ConfigMap : `oc rollout restart ds/fluent-bit` |
 
 ### Limites
 
