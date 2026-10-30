@@ -1,0 +1,78 @@
+# Prometheus : collecte toutes les 5 s les métriques /actuator/prometheus des 3 services Spring.
+# Sa configuration vient d'une ConfigMap créée depuis le fichier du dépôt (voir docs/openshift-declaratif.md) :
+#   oc create configmap prometheus-config --from-file=observability/prometheus/prometheus.yml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  labels:
+    app: prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      containers:
+        - name: prometheus
+          image: docker.io/prom/prometheus:v3.15.1
+          ports:
+            - name: http
+              containerPort: 9090
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          volumeMounts:
+            # La ConfigMap apparaît comme un dossier : /etc/prometheus/prometheus.yml
+            - name: config
+              mountPath: /etc/prometheus
+            # Données (séries temporelles). L'image prévoit un utilisateur fixe ; OpenShift lance avec un
+            # utilisateur aléatoire qui ne peut pas écrire dans /prometheus : un emptyDir, lui, est inscriptible.
+            - name: data
+              mountPath: /prometheus
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-config
+        - name: data
+          emptyDir: {}               # l'historique est perdu si le pod est recréé
+---
+# Nom DNS "prometheus:9090", utilisé par la datasource de Grafana
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  labels:
+    app: prometheus
+spec:
+  selector:
+    app: prometheus
+  ports:
+    - name: http
+      port: 9090
+      targetPort: http
+---
+# Interface web de Prometheus (état des cibles : /targets)
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: prometheus
+  labels:
+    app: prometheus
+spec:
+  to:
+    kind: Service
+    name: prometheus
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

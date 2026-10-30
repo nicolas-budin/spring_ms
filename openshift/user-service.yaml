@@ -1,0 +1,107 @@
+# user-service : même modèle que notification-service.
+# L'image se construit avec : oc start-build user-service --from-archive=/tmp/spring-ms.tgz --follow
+
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: user-service
+  labels:
+    app: user-service
+spec:
+  source:
+    type: Binary
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: user-service/Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: user-service:latest
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: user-service
+  labels:
+    app: user-service
+spec:
+  lookupPolicy:
+    local: true
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-service
+  labels:
+    app: user-service
+  annotations:
+    image.openshift.io/triggers: >-
+      [{"from": {"kind": "ImageStreamTag", "name": "user-service:latest"},
+        "fieldPath": "spec.template.spec.containers[?(@.name==\"app\")].image"}]
+spec:
+  replicas: 1                        # 1 seul pod : H2 est en mémoire
+  selector:
+    matchLabels:
+      app: user-service
+  template:
+    metadata:
+      labels:
+        app: user-service
+    spec:
+      containers:
+        - name: app
+          image: user-service:latest
+          ports:
+            - name: http             # client gRPC seulement : pas de port gRPC à ouvrir
+              containerPort: 8081
+          env:
+            - name: SPRING_RABBITMQ_HOST
+              value: rabbitmq
+            - name: SERVER_FORWARD_HEADERS_STRATEGY
+              value: framework
+            # Adresse gRPC de notification-service : le nom de son Service (localhost:9090 en local)
+            - name: SPRING_GRPC_CLIENT_CHANNEL_NOTIFICATION_TARGET
+              value: static://notification-service:9090
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-service
+  labels:
+    app: user-service
+spec:
+  selector:
+    app: user-service
+  ports:
+    - name: http
+      port: 8081
+      targetPort: http
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: user-service
+  labels:
+    app: user-service
+spec:
+  to:
+    kind: Service
+    name: user-service
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

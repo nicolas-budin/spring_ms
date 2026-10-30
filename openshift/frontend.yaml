@@ -1,0 +1,112 @@
+# frontend : même modèle que les deux backends.
+# L'image se construit avec : oc start-build frontend --from-archive=/tmp/spring-ms.tgz --follow
+
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: frontend
+  labels:
+    app: frontend
+spec:
+  source:
+    type: Binary
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: frontend/Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: frontend:latest
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: frontend
+  labels:
+    app: frontend
+spec:
+  lookupPolicy:
+    local: true
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  labels:
+    app: frontend
+  annotations:
+    image.openshift.io/triggers: >-
+      [{"from": {"kind": "ImageStreamTag", "name": "frontend:latest"},
+        "fieldPath": "spec.template.spec.containers[?(@.name==\"app\")].image"}]
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+        - name: app
+          image: frontend:latest
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: SERVER_FORWARD_HEADERS_STRATEGY
+              value: framework       # redirections (après création d'un utilisateur) en https
+            # Appels serveur à serveur : noms des Services, à l'intérieur du cluster
+            - name: SERVICES_USER_URL
+              value: http://user-service:8081
+            - name: SERVICES_NOTIFICATION_URL
+              value: http://notification-service:8082
+            # Liens Swagger affichés dans le navigateur : URLs des Routes, à l'extérieur du cluster
+            - name: SERVICES_USER_SWAGGERURL
+              value: https://user-service-spring-ms.apps-crc.testing/swagger-ui.html
+            - name: SERVICES_NOTIFICATION_SWAGGERURL
+              value: https://notification-service-spring-ms.apps-crc.testing/swagger-ui.html
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  labels:
+    app: frontend
+spec:
+  selector:
+    app: frontend
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: frontend
+  labels:
+    app: frontend
+spec:
+  to:
+    kind: Service
+    name: frontend
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

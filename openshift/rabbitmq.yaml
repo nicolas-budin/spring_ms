@@ -1,0 +1,79 @@
+# RabbitMQ : équivalent de
+#   oc new-app docker.io/library/rabbitmq:4.3.7-management --name=rabbitmq
+#   oc create route edge rabbitmq-console --service=rabbitmq --port=15672-tcp
+
+# Le Deployment : "je veux 1 pod avec cette image, recrée-le s'il meurt"
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rabbitmq
+  labels:
+    app: rabbitmq
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rabbitmq                  # les pods gérés sont ceux qui portent ce label
+  template:                          # le modèle de pod
+    metadata:
+      labels:
+        app: rabbitmq                # doit correspondre au selector ci-dessus
+    spec:
+      containers:
+        - name: rabbitmq
+          image: docker.io/library/rabbitmq:4.3.7-management
+          ports:
+            - name: amqp             # protocole des messages (utilisé par les services Spring)
+              containerPort: 5672
+            - name: console          # console web
+              containerPort: 15672
+          # Le pod ne reçoit du trafic qu'une fois RabbitMQ prêt
+          readinessProbe:
+            exec:
+              command: ["rabbitmq-diagnostics", "-q", "ping"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 10
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/rabbitmq
+      volumes:
+        # Dossier temporaire, vidé si le pod est recréé : les messages en attente sont alors perdus.
+        # Suffisant en développement ; en production on utiliserait un PersistentVolumeClaim.
+        - name: data
+          emptyDir: {}
+---
+# Le Service : nom DNS stable "rabbitmq" devant le pod (SPRING_RABBITMQ_HOST=rabbitmq)
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq
+  labels:
+    app: rabbitmq
+spec:
+  selector:
+    app: rabbitmq                    # envoie le trafic aux pods qui portent ce label
+  ports:
+    - name: amqp
+      port: 5672                     # port du Service
+      targetPort: amqp               # port du pod, désigné par son nom
+    - name: console
+      port: 15672
+      targetPort: console
+---
+# La Route : URL HTTPS publique pour la console (le port AMQP n'est pas du HTTP, il reste interne)
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: rabbitmq-console
+  labels:
+    app: rabbitmq
+spec:
+  to:
+    kind: Service
+    name: rabbitmq
+  port:
+    targetPort: console              # le port du Service visé
+  tls:
+    termination: edge                # la Route gère le HTTPS
+    insecureEdgeTerminationPolicy: Redirect   # http:// redirige vers https://

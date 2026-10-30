@@ -12,4 +12,5 @@ RUN --mount=type=cache,target=/root/.m2 mvn -B -q -pl notification-service -am p
 FROM eclipse-temurin:25-jre
 WORKDIR /app
 COPY --from=build /workspace/notification-service/target/notification-service-*.jar app.jar
+EXPOSE 8082 9090
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

@@ -1,0 +1,120 @@
+# notification-service : équivalent de
+#   oc new-build --name=notification-service --binary --strategy=docker
+#   oc patch bc/notification-service -p '{"spec":{"strategy":{"dockerStrategy":{"dockerfilePath":"notification-service/Dockerfile"}}}}'
+#   oc new-app --image-stream=notification-service:latest --name=notification-service -e ...
+#   oc create route edge notification-service --service=notification-service --port=8082-tcp
+# L'image se construit ensuite avec : oc start-build notification-service --from-archive=/tmp/spring-ms.tgz --follow
+
+# La recette de build
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: notification-service
+  labels:
+    app: notification-service
+spec:
+  source:
+    type: Binary                     # le code est envoyé depuis le poste (--from-archive)
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: notification-service/Dockerfile   # ce que faisait oc patch
+  output:
+    to:
+      kind: ImageStreamTag
+      name: notification-service:latest
+---
+# Là où l'image construite est rangée, dans le registry interne d'OpenShift
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: notification-service
+  labels:
+    app: notification-service
+spec:
+  lookupPolicy:
+    local: true                      # permet d'écrire "image: notification-service:latest" dans le Deployment
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-service
+  labels:
+    app: notification-service
+  annotations:
+    # Redéploie automatiquement à chaque nouvelle image construite (déclencheur ajouté par new-app)
+    image.openshift.io/triggers: >-
+      [{"from": {"kind": "ImageStreamTag", "name": "notification-service:latest"},
+        "fieldPath": "spec.template.spec.containers[?(@.name==\"app\")].image"}]
+spec:
+  replicas: 1                        # 1 seul pod : H2 est en mémoire, deux pods auraient chacun leurs données
+  selector:
+    matchLabels:
+      app: notification-service
+  template:
+    metadata:
+      labels:
+        app: notification-service
+    spec:
+      containers:
+        - name: app
+          image: notification-service:latest
+          ports:                     # ce qu'apportait EXPOSE dans le Dockerfile
+            - name: http             # REST + Swagger
+              containerPort: 8082
+            - name: grpc             # serveur gRPC, appelé par user-service
+              containerPort: 9090
+          env:                       # les -e de new-app
+            - name: SPRING_RABBITMQ_HOST
+              value: rabbitmq        # le nom du Service RabbitMQ
+            - name: SERVER_FORWARD_HEADERS_STRATEGY
+              value: framework       # la Route est en HTTPS : Spring lit X-Forwarded-Proto
+          # Le pod ne reçoit du trafic qu'une fois Spring démarré
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 5
+          # Si l'application ne répond plus, OpenShift redémarre le conteneur
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 10
+---
+# Nom DNS interne : notification-service:8082 (REST) et notification-service:9090 (gRPC)
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-service
+  labels:
+    app: notification-service
+spec:
+  selector:
+    app: notification-service
+  ports:
+    - name: http
+      port: 8082
+      targetPort: http
+    - name: grpc
+      port: 9090
+      targetPort: grpc
+---
+# URL publique pour Swagger. Le port gRPC n'est pas exposé : tester avec oc port-forward svc/notification-service 9090
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: notification-service
+  labels:
+    app: notification-service
+spec:
+  to:
+    kind: Service
+    name: notification-service
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

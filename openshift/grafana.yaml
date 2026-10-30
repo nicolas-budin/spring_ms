@@ -1,0 +1,102 @@
+# Grafana : dashboard « Spring MS » alimenté par Prometheus.
+# Sa configuration vient de 3 ConfigMaps créées depuis les fichiers du dépôt (voir docs/openshift-declaratif.md) :
+#   oc create configmap grafana-datasources --from-file=observability/grafana/provisioning/datasources/prometheus.yml
+#   oc create configmap grafana-dashboard-provider --from-file=observability/grafana/provisioning/dashboards/dashboards.yml
+#   oc create configmap grafana-dashboards --from-file=observability/grafana/dashboards/spring-ms.json
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  labels:
+    app: grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      containers:
+        - name: grafana
+          image: docker.io/grafana/grafana:13.2.5
+          ports:
+            - name: http
+              containerPort: 3000
+          env:                       # mêmes réglages que dans docker-compose
+            - name: GF_SECURITY_ADMIN_USER
+              value: admin
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              value: admin
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "true"
+            - name: GF_AUTH_ANONYMOUS_ORG_ROLE
+              value: Viewer
+            - name: GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH
+              value: /var/lib/grafana/dashboards/spring-ms.json
+            # URL publique (la Route) : Grafana s'en sert pour ses redirections et ses liens
+            - name: GF_SERVER_ROOT_URL
+              value: https://grafana-spring-ms.apps-crc.testing
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          volumeMounts:
+            # Données de Grafana (base SQLite, sessions) : emptyDir, inscriptible par l'utilisateur aléatoire
+            - name: data
+              mountPath: /var/lib/grafana
+            # Provisioning : la source de données Prometheus et l'emplacement des dashboards
+            - name: datasources
+              mountPath: /etc/grafana/provisioning/datasources
+            - name: dashboard-provider
+              mountPath: /etc/grafana/provisioning/dashboards
+            # Le dashboard lui-même, à l'endroit indiqué par dashboards.yml
+            - name: dashboards
+              mountPath: /var/lib/grafana/dashboards
+      volumes:
+        - name: data
+          emptyDir: {}
+        - name: datasources
+          configMap:
+            name: grafana-datasources
+        - name: dashboard-provider
+          configMap:
+            name: grafana-dashboard-provider
+        - name: dashboards
+          configMap:
+            name: grafana-dashboards
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  labels:
+    app: grafana
+spec:
+  selector:
+    app: grafana
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: grafana
+  labels:
+    app: grafana
+spec:
+  to:
+    kind: Service
+    name: grafana
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

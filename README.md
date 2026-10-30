@@ -30,9 +30,11 @@ user-service publie un événement `user.deleted` sur l'exchange `users`, et not
 message attend dans la file et il est traité au redémarrage. La console RabbitMQ est sur http://localhost:15672
 (`guest` / `guest`).
 
-Documentation complémentaire : [DOCKER.md](DOCKER.md) (lancer / arrêter les services) et le dossier [docs/](docs/)
+Documentation complémentaire : [DOCKER.md](DOCKER.md) (lancer / arrêter les services), [OPENSHIFT.md](OPENSHIFT.md)
+(déployer sur OpenShift) et le dossier [docs/](docs/)
 (notamment le [plan d'observabilité](docs/plan-observabilite.md), le [plan RabbitMQ](docs/plan-rabbitmq.md),
-[RabbitMQ expliqué pas à pas](docs/rabbitmq-explique.md) et le [plan OpenSearch](docs/plan-opensearch.md)).
+[RabbitMQ expliqué pas à pas](docs/rabbitmq-explique.md), le [plan OpenSearch](docs/plan-opensearch.md) et les guides
+OpenShift [impératif](docs/openshift-imperatif.md) et [déclaratif](docs/openshift-declaratif.md)).
 
 ## Lancer en local
 
