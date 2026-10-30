@@ -34,7 +34,8 @@ Documentation complémentaire : [DOCKER.md](DOCKER.md) (lancer / arrêter les se
 (déployer sur OpenShift) et le dossier [docs/](docs/)
 (notamment le [plan d'observabilité](docs/plan-observabilite.md), le [plan RabbitMQ](docs/plan-rabbitmq.md),
 [RabbitMQ expliqué pas à pas](docs/rabbitmq-explique.md), le [plan OpenSearch](docs/plan-opensearch.md) et les guides
-OpenShift [impératif](docs/openshift-imperatif.md) et [déclaratif](docs/openshift-declaratif.md)).
+OpenShift [impératif](docs/openshift-imperatif.md), [déclaratif](docs/openshift-declaratif.md) et
+[Argo CD](docs/openshift-argocd.md)).
 
 ## Lancer en local
 

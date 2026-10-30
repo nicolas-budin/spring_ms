@@ -22,6 +22,10 @@ Les commandes `oc` impératives ne font en réalité que **fabriquer du YAML** e
 | [notification-service.yaml](../openshift/notification-service.yaml) | BuildConfig, ImageStream, Deployment, Service (8082, 9090), Route | `oc new-build` + `oc patch` + `oc new-app` + `oc create route` |
 | [user-service.yaml](../openshift/user-service.yaml) | idem, port 8081, adresse gRPC de notification-service | idem |
 | [frontend.yaml](../openshift/frontend.yaml) | idem, port 8080, adresses des backends | idem |
+| [prometheus.yaml](../openshift/prometheus.yaml) | ConfigMap `prometheus-config`, Deployment, Service, Route | `oc create configmap --from-file` + `oc new-app` + `oc create route` |
+| [grafana.yaml](../openshift/grafana.yaml) | 3 ConfigMaps (source de données, emplacement des dashboards, dashboard), Deployment, Service, Route | idem |
+
+Les ConfigMaps de Prometheus et Grafana sont des **copies** des fichiers de `observability/`, que docker-compose utilise aussi : si tu modifies l'un, modifie l'autre. Pour que ce déploiement soit appliqué automatiquement depuis Git, voir le guide [Argo CD](openshift-argocd.md).
 
 Chaque fichier contient plusieurs objets séparés par `---`. Les commentaires indiquent la commande impérative que chaque bloc remplace.
 

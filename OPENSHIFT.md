@@ -1,13 +1,14 @@
 # Déployer sur OpenShift (CRC)
 
-L'application (RabbitMQ, notification-service, user-service, frontend) se déploie sur OpenShift Local (CRC) de deux façons. Chacune a son guide :
+L'application (RabbitMQ, les 3 services, Prometheus et Grafana) se déploie sur OpenShift Local (CRC) de trois façons. Chacune a son guide :
 
 | Guide | Méthode | Pour quoi faire |
 |---|---|---|
 | [Impératif](docs/openshift-imperatif.md) | commandes `oc new-build`, `oc new-app`, `oc create route`… une par une | apprendre et voir ce que chaque commande crée |
 | [Déclaratif](docs/openshift-declaratif.md) | manifests YAML de [openshift/](openshift/) + `oc apply` | déploiement que l'on peut rejouer, relire et versionner |
+| [Argo CD (GitOps)](docs/openshift-argocd.md) | les mêmes manifests, appliqués par Argo CD depuis GitHub | Git est la source de vérité : un `git push` met le cluster à jour |
 
-Les deux guides aboutissent au même résultat. Ne pas les mélanger dans un même projet : les Deployments créés par `oc new-app` ne peuvent pas être repris par `oc apply`. Il faut d'abord supprimer le projet.
+Les trois guides aboutissent au même résultat. Le guide Argo CD prend la suite du guide déclaratif : il reprend les objets créés par `oc apply`. En revanche, ne pas mélanger l'impératif avec les deux autres dans un même projet : les Deployments créés par `oc new-app` ne peuvent pas être repris par `oc apply` ni par Argo CD. Il faut d'abord supprimer le projet.
 
 ## Prérequis
 
@@ -27,6 +28,9 @@ Console web : <https://console-openshift-console.apps-crc.testing>
 | <https://user-service-spring-ms.apps-crc.testing/swagger-ui.html> | Swagger de user-service |
 | <https://notification-service-spring-ms.apps-crc.testing/swagger-ui.html> | Swagger de notification-service |
 | <https://rabbitmq-console-spring-ms.apps-crc.testing> | console RabbitMQ (`guest` / `guest`) |
+| <https://prometheus-spring-ms.apps-crc.testing/targets> | Prometheus : état des cibles |
+| <https://grafana-spring-ms.apps-crc.testing> | Grafana, dashboard « Spring MS » (`admin` / `admin` pour modifier) |
+| <https://openshift-gitops-server-openshift-gitops.apps-crc.testing> | console Argo CD (« Log in via OpenShift ») |
 
 Le certificat est auto-signé par CRC : il faut accepter l'alerte du navigateur.
 
@@ -38,7 +42,7 @@ gRPC n'a pas de Route. Pour l'atteindre depuis le poste : `oc port-forward svc/n
 - **Noms internes :** les mêmes que dans docker-compose (`rabbitmq`, `user-service`, `notification-service`), car ce sont les noms des Services.
 - **H2 en mémoire :** un seul pod par service, sinon chaque pod aurait ses propres données.
 - **RabbitMQ :** ses données sont dans un `emptyDir`, et sont perdues si le pod est recréé.
-- **Observabilité :** Prometheus, Grafana et OpenSearch ne sont pas encore déployés sur OpenShift.
+- **Observabilité :** Prometheus et Grafana sont déployés, avec leur configuration dans des ConfigMaps (copies des fichiers de `observability/`). OpenSearch ne l'est pas encore.
 
 ## Tout supprimer
 

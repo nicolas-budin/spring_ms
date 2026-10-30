@@ -1,0 +1,37 @@
+# Application Argo CD : "déploie dans le projet spring-ms tout ce qui se trouve dans le dossier openshift/
+# de ce dépôt Git, et garde le cluster identique à Git".
+# À appliquer une seule fois, à la main : oc apply -f argocd/application.yaml
+# (ce fichier est hors du dossier openshift/ : Argo CD ne le gère pas lui-même)
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: spring-ms
+  namespace: openshift-gitops        # là où tourne l'instance Argo CD d'OpenShift GitOps
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/nicolas-budin/spring_ms.git
+    targetRevision: main
+    path: openshift                  # dossier de YAML ordinaires : Argo CD applique tous les .yaml qu'il contient
+  destination:
+    server: https://kubernetes.default.svc   # le cluster où tourne Argo CD
+    namespace: spring-ms
+  syncPolicy:
+    automated:
+      prune: true                    # un objet retiré de Git est supprimé du cluster
+      selfHeal: true                 # une modification faite à la main est annulée (retour à l'état de Git)
+    syncOptions:
+      - CreateNamespace=true
+      - RespectIgnoreDifferences=true   # applique aussi ignoreDifferences pendant la synchronisation
+    managedNamespaceMetadata:
+      labels:
+        # Autorise l'instance openshift-gitops à gérer ce namespace
+        argocd.argoproj.io/managed-by: openshift-gitops
+  ignoreDifferences:
+    # Les images sont construites par des builds binaires (oc start-build). Après chaque build, le déclencheur
+    # d'OpenShift remplace "notification-service:latest" par l'adresse exacte de l'image dans le Deployment.
+    # Sans cette règle, Argo CD verrait une différence avec Git et la "corrigerait" en boucle.
+    - group: apps
+      kind: Deployment
+      jqPathExpressions:
+        - .spec.template.spec.containers[].image

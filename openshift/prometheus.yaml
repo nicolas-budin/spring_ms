@@ -1,7 +1,32 @@
 # Prometheus : collecte toutes les 5 s les métriques /actuator/prometheus des 3 services Spring.
-# Sa configuration vient d'une ConfigMap créée depuis le fichier du dépôt (voir docs/openshift-declaratif.md) :
-#   oc create configmap prometheus-config --from-file=observability/prometheus/prometheus.yml
 
+# Copie de observability/prometheus/prometheus.yml (utilisé par docker-compose) : si tu modifies l'un, modifie l'autre.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  labels:
+    app: prometheus
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 5s
+      evaluation_interval: 5s
+
+    scrape_configs:
+      - job_name: spring-ms
+        metrics_path: /actuator/prometheus
+        static_configs:
+          - targets: ["frontend:8080"]
+            labels:
+              service: frontend
+          - targets: ["user-service:8081"]
+            labels:
+              service: user-service
+          - targets: ["notification-service:8082"]
+            labels:
+              service: notification-service
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
