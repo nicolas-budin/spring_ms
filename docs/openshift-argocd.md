@@ -26,7 +26,7 @@ C'est le principe du **GitOps** : **Git est la source de vérité**.
 | Fichier | Rôle |
 |---|---|
 | [argocd/application.yaml](../argocd/application.yaml) | l'**Application** Argo CD : « déploie le dossier `openshift/` du dépôt dans le projet `spring-ms` ». C'est le seul fichier appliqué à la main, une seule fois. |
-| [openshift/*.yaml](../openshift/) | les manifests : RabbitMQ, les 3 services, Prometheus et Grafana. Argo CD applique tous les `.yaml` du dossier. |
+| [openshift/*.yaml](../openshift/) | les manifests : RabbitMQ, les 3 services, Prometheus, Grafana, OpenSearch et Fluent Bit. Argo CD applique tous les `.yaml` du dossier. |
 
 L'opérateur **Red Hat OpenShift GitOps** (Argo CD) est déjà installé sur le CRC : son instance tourne dans le namespace `openshift-gitops`. Les applications `hello-world-*` et `ollama-agent` l'utilisent déjà.
 
@@ -159,6 +159,96 @@ Si un fichier est supprimé de `openshift/`, ou un objet retiré d'un fichier, A
    ```
 
    Cette commande ne modifie pas le Deployment décrit dans Git : elle recrée seulement les pods. Argo CD ne la contredit donc pas.
+
+## Logs centralisés (OpenSearch)
+
+Les logs des 3 services Spring sont rassemblés dans OpenSearch, comme avec docker-compose. Les fichiers sont [opensearch.yaml](../openshift/opensearch.yaml) et [fluent-bit.yaml](../openshift/fluent-bit.yaml).
+
+```mermaid
+flowchart LR
+    pods["pods Spring<br/>logs JSON (ECS)"]
+    fichiers["nœud CRC<br/>/var/log/pods/…/0.log"]
+    fluent["Fluent Bit<br/>DaemonSet"]
+    opensearch["OpenSearch<br/>opensearch:9200"]
+    dashboards["OpenSearch Dashboards<br/>(Route)"]
+
+    pods -- "sortie standard, écrite par CRI-O" --> fichiers
+    fluent -- "lit les fichiers" --> fichiers
+    fluent --> opensearch
+    dashboards -- requêtes --> opensearch
+```
+
+### Ce qui change par rapport à docker-compose
+
+| | docker-compose | OpenShift |
+|---|---|---|
+| Collecte des logs | Docker **pousse** chaque ligne vers Fluent Bit (driver `fluentd`) | CRI-O écrit les logs dans des **fichiers du nœud**, et Fluent Bit **les lit** |
+| Fluent Bit | un conteneur | un **DaemonSet** : un pod par nœud (un seul sur CRC) |
+| Format des lignes | JSON envoyé tel quel | chaque ligne est préfixée par CRI-O (`<heure> stdout F …`), et le parser `cri` retire ce préfixe |
+| Préparation de Dashboards | conteneur `opensearch-init` | Job `opensearch-init`, lancé par Argo CD après chaque synchronisation (hook `PostSync`) |
+
+Les services Spring écrivent leurs logs en JSON grâce à la variable `LOGGING_STRUCTURED_FORMAT_CONSOLE=ecs`, ajoutée dans leurs Deployments. Fluent Bit ne lit **que** les pods Spring. Il ignore ses propres logs et ceux d'OpenSearch, qu'il relirait en boucle, ainsi que ceux des pods de build.
+
+### Les autorisations (SCC)
+
+OpenShift lance normalement les conteneurs avec un utilisateur aléatoire, sans accès au nœud. Deux composants ont besoin de plus :
+
+| Composant | SCC | Pourquoi |
+|---|---|---|
+| OpenSearch, Dashboards | `anyuid` | leurs images tournent avec l'utilisateur 1000, propriétaire de leurs dossiers |
+| Fluent Bit | `privileged` | lire `/var/log/pods` sur le nœud demande d'être root, un volume `hostPath` et le passage des contrôles SELinux |
+
+Chaque autorisation est un **RoleBinding** dans Git, qui donne à un ServiceAccount (`opensearch`, `fluent-bit`) le droit d'utiliser la SCC. Argo CD peut les créer lui-même : dans le projet, il a le verbe `bind`, qui permet de transmettre ces droits.
+
+Pendant la synchronisation, tu verras peut-être l'avertissement `would violate PodSecurity "baseline"` pour Fluent Bit. Ce n'est qu'un **avertissement**, parce que le namespace est en `warn=baseline`.
+
+### Déployer
+
+Comme le reste, en passant par Git :
+
+```bash
+git add openshift/ && git commit -m "OpenSearch + Fluent Bit" && git push
+```
+
+Puis clique sur **Refresh** dans Argo CD. Après la synchronisation :
+
+1. les services Spring redémarrent, puisque leur variable d'environnement a changé, et écrivent désormais en JSON ;
+2. `oc get pods` doit afficher `opensearch`, `opensearch-dashboards` et `fluent-bit-xxxxx` en `1/1 Running` ;
+3. le Job `opensearch-init` passe à `Completed` : il a créé l'index pattern `logs-*`.
+
+### Vérifier
+
+```bash
+oc exec deploy/opensearch -- curl -s 'localhost:9200/_cat/indices/logs-*?v'   # un index du jour, green
+oc logs ds/fluent-bit | grep -i error                                         # rien
+```
+
+Ouvre OpenSearch Dashboards sur <https://opensearch-dashboards-spring-ms.apps-crc.testing>, puis **Discover** :
+
+| Recherche | Résultat |
+|---|---|
+| `service.name : "user-service"` | les logs d'un service |
+| `log.level : "WARN"` | les avertissements |
+| `message : "supprimé"` | les suppressions traitées par notification-service via RabbitMQ |
+
+Pour provoquer un warning gRPC, supprime le pod de notification-service : `oc delete pod -l app=notification-service`. Crée tout de suite un utilisateur : pendant que le nouveau pod démarre, user-service écrit « Envoi de la notification impossible … UNAVAILABLE ».
+
+On ne peut pas utiliser `oc scale --replicas=0` pour ce test : *selfHeal* le remettrait aussitôt à 1.
+
+### Dépannage
+
+| Symptôme | Où regarder |
+|---|---|
+| aucun pod `fluent-bit` | `oc describe ds fluent-bit` (section *Events*) : une erreur `unable to validate against any security context constraint` veut dire que le RoleBinding `fluent-bit-privileged` manque |
+| `opensearch` redémarre en boucle | `oc logs deploy/opensearch --previous` : mémoire (limite à 1536 Mi) ou droits sur `/usr/share/opensearch/data` |
+| pas d'index `logs-*` | `oc logs ds/fluent-bit` : connexion à `opensearch:9200`, ou fichiers non trouvés |
+| Discover vide alors que l'index existe | élargir la plage de temps en haut à droite (par exemple « Last 1 hour ») |
+
+### Limites
+
+- **Les logs sont stockés dans un `emptyDir`** : ils sont perdus si le pod OpenSearch est recréé.
+- **Le fichier de configuration de Fluent Bit est différent de celui de docker-compose** : seule l'entrée change, les filtres sont les mêmes. Le script `init-dashboards.sh`, lui, est une copie : si tu modifies l'un, modifie l'autre.
+- **OpenShift a sa propre solution de logs**, l'opérateur *OpenShift Logging*. Ici, on reprend la chaîne de docker-compose pour garder la même configuration.
 
 ## Ce qui reste hors d'Argo CD
 

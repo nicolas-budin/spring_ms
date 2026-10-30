@@ -60,6 +60,9 @@ spec:
               value: rabbitmq
             - name: SERVER_FORWARD_HEADERS_STRATEGY
               value: framework
+            # Logs en JSON (format ECS) : Fluent Bit les décode pour OpenSearch
+            - name: LOGGING_STRUCTURED_FORMAT_CONSOLE
+              value: ecs
             # Adresse gRPC de notification-service : le nom de son Service (localhost:9090 en local)
             - name: SPRING_GRPC_CLIENT_CHANNEL_NOTIFICATION_TARGET
               value: static://notification-service:9090

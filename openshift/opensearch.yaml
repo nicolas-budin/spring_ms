@@ -1,0 +1,224 @@
+# OpenSearch (stockage et recherche des logs) + OpenSearch Dashboards (interface web).
+# Les logs y sont envoyés par Fluent Bit (voir fluent-bit.yaml).
+
+# Compte de service des pods OpenSearch et Dashboards
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: opensearch
+  labels:
+    app: opensearch
+---
+# Autorise ce compte à utiliser la SCC "anyuid" : les images OpenSearch tournent avec l'utilisateur 1000, à qui
+# appartiennent leurs dossiers. Avec l'utilisateur aléatoire habituel d'OpenShift, elles ne pourraient pas y écrire.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: opensearch-anyuid
+  labels:
+    app: opensearch
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:openshift:scc:anyuid
+subjects:
+  - kind: ServiceAccount
+    name: opensearch
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opensearch
+  labels:
+    app: opensearch
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: opensearch
+  template:
+    metadata:
+      labels:
+        app: opensearch
+    spec:
+      serviceAccountName: opensearch
+      securityContext:
+        runAsUser: 1000              # l'utilisateur prévu par l'image (permis par la SCC anyuid)
+      containers:
+        - name: opensearch
+          image: docker.io/opensearchproject/opensearch:3.8.0
+          ports:
+            - name: http
+              containerPort: 9200
+          env:                       # mêmes réglages que dans docker-compose
+            - name: discovery.type
+              value: single-node
+            - name: DISABLE_SECURITY_PLUGIN
+              value: "true"          # développement uniquement : ni TLS ni mot de passe
+            - name: DISABLE_INSTALL_DEMO_CONFIG
+              value: "true"
+            - name: OPENSEARCH_JAVA_OPTS
+              value: -Xms512m -Xmx512m
+          readinessProbe:
+            httpGet:
+              path: /_cluster/health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          resources:
+            limits:
+              memory: 1536Mi         # 512 Mo de heap Java + la mémoire hors heap d'OpenSearch
+          volumeMounts:
+            - name: data
+              mountPath: /usr/share/opensearch/data
+      volumes:
+        - name: data
+          emptyDir: {}               # les logs stockés sont perdus si le pod est recréé
+---
+# Nom DNS interne "opensearch:9200", utilisé par Fluent Bit et Dashboards (pas de Route : API sans mot de passe)
+apiVersion: v1
+kind: Service
+metadata:
+  name: opensearch
+  labels:
+    app: opensearch
+spec:
+  selector:
+    app: opensearch
+  ports:
+    - name: http
+      port: 9200
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opensearch-dashboards
+  labels:
+    app: opensearch-dashboards
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: opensearch-dashboards
+  template:
+    metadata:
+      labels:
+        app: opensearch-dashboards
+    spec:
+      serviceAccountName: opensearch
+      securityContext:
+        runAsUser: 1000
+      containers:
+        - name: dashboards
+          image: docker.io/opensearchproject/opensearch-dashboards:3.8.0
+          ports:
+            - name: http
+              containerPort: 5601
+          env:
+            - name: OPENSEARCH_HOSTS
+              value: '["http://opensearch:9200"]'
+            - name: DISABLE_SECURITY_DASHBOARDS_PLUGIN
+              value: "true"
+          readinessProbe:
+            httpGet:
+              path: /api/status
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: opensearch-dashboards
+  labels:
+    app: opensearch-dashboards
+spec:
+  selector:
+    app: opensearch-dashboards
+  ports:
+    - name: http
+      port: 5601
+      targetPort: http
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: opensearch-dashboards
+  labels:
+    app: opensearch-dashboards
+spec:
+  to:
+    kind: Service
+    name: opensearch-dashboards
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+---
+# Copie de observability/opensearch/init-dashboards.sh (utilisé par docker-compose) : si tu modifies l'un, modifie l'autre.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opensearch-init
+  labels:
+    app: opensearch
+data:
+  init-dashboards.sh: |
+    #!/bin/sh
+    # Crée l'index pattern "logs-*" dans OpenSearch Dashboards et le met par défaut : Discover est prêt à l'emploi.
+    set -e
+    OPENSEARCH=http://opensearch:9200
+    DASHBOARDS=http://opensearch-dashboards:5601
+
+    # Un seul nœud : pas de réplique, sinon les index restent en état "yellow"
+    curl -sf -X PUT "$OPENSEARCH/_index_template/logs" -H 'Content-Type: application/json' \
+      -d '{"index_patterns": ["logs-*"], "template": {"settings": {"number_of_replicas": 0}}}' > /dev/null
+
+    echo "Attente d'OpenSearch Dashboards..."
+    until curl -sf "$DASHBOARDS/api/status" > /dev/null; do
+      sleep 5
+    done
+
+    curl -sf -X POST "$DASHBOARDS/api/saved_objects/index-pattern/logs?overwrite=true" \
+      -H 'osd-xsrf: true' -H 'Content-Type: application/json' \
+      -d '{"attributes": {"title": "logs-*", "timeFieldName": "@timestamp"}}' > /dev/null
+
+    curl -sf -X POST "$DASHBOARDS/api/opensearch-dashboards/settings" \
+      -H 'osd-xsrf: true' -H 'Content-Type: application/json' \
+      -d '{"changes": {"defaultIndex": "logs"}}' > /dev/null
+
+    echo "Index pattern logs-* créé"
+---
+# Préparation, une fois Dashboards prêt : modèle d'index sans réplique + index pattern "logs-*" par défaut.
+# Hook Argo CD "PostSync" : le Job est lancé après chaque synchronisation réussie. Un Job ne peut pas être modifié ;
+# "BeforeHookCreation" supprime le précédent avant d'en créer un nouveau.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: opensearch-init
+  labels:
+    app: opensearch
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: opensearch-init
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: init
+          image: docker.io/curlimages/curl:8.22.0
+          command: ["sh", "/scripts/init-dashboards.sh"]
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+      volumes:
+        - name: scripts
+          configMap:
+            name: opensearch-init

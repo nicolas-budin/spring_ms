@@ -58,6 +58,9 @@ spec:
           env:
             - name: SERVER_FORWARD_HEADERS_STRATEGY
               value: framework       # redirections (après création d'un utilisateur) en https
+            # Logs en JSON (format ECS) : Fluent Bit les décode pour OpenSearch
+            - name: LOGGING_STRUCTURED_FORMAT_CONSOLE
+              value: ecs
             # Appels serveur à serveur : noms des Services, à l'intérieur du cluster
             - name: SERVICES_USER_URL
               value: http://user-service:8081

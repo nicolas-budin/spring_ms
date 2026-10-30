@@ -1,6 +1,6 @@
 # Déployer sur OpenShift (CRC)
 
-L'application (RabbitMQ, les 3 services, Prometheus et Grafana) se déploie sur OpenShift Local (CRC) de trois façons. Chacune a son guide :
+L'application (RabbitMQ, les 3 services, Prometheus, Grafana et OpenSearch) se déploie sur OpenShift Local (CRC) de trois façons. Chacune a son guide :
 
 | Guide | Méthode | Pour quoi faire |
 |---|---|---|
@@ -30,6 +30,7 @@ Console web : <https://console-openshift-console.apps-crc.testing>
 | <https://rabbitmq-console-spring-ms.apps-crc.testing> | console RabbitMQ (`guest` / `guest`) |
 | <https://prometheus-spring-ms.apps-crc.testing/targets> | Prometheus : état des cibles |
 | <https://grafana-spring-ms.apps-crc.testing> | Grafana, dashboard « Spring MS » (`admin` / `admin` pour modifier) |
+| <https://opensearch-dashboards-spring-ms.apps-crc.testing> | OpenSearch Dashboards : logs des services (menu Discover) |
 | <https://openshift-gitops-server-openshift-gitops.apps-crc.testing> | console Argo CD (« Log in via OpenShift ») |
 
 Le certificat est auto-signé par CRC : il faut accepter l'alerte du navigateur.
@@ -42,7 +43,7 @@ gRPC n'a pas de Route. Pour l'atteindre depuis le poste : `oc port-forward svc/n
 - **Noms internes :** les mêmes que dans docker-compose (`rabbitmq`, `user-service`, `notification-service`), car ce sont les noms des Services.
 - **H2 en mémoire :** un seul pod par service, sinon chaque pod aurait ses propres données.
 - **RabbitMQ :** ses données sont dans un `emptyDir`, et sont perdues si le pod est recréé.
-- **Observabilité :** Prometheus et Grafana sont déployés, avec leur configuration dans des ConfigMaps (copies des fichiers de `observability/`). OpenSearch ne l'est pas encore.
+- **Observabilité :** Prometheus et Grafana sont déployés, avec leur configuration dans des ConfigMaps (copies des fichiers de `observability/`). Les logs vont dans OpenSearch, mais Fluent Bit les lit dans les fichiers du nœud : sur OpenShift, il n'y a pas de driver de logs Docker.
 
 ## Tout supprimer
 

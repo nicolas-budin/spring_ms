@@ -1,0 +1,142 @@
+# Fluent Bit : lit les logs des pods Spring sur le nœud et les envoie à OpenSearch.
+# Différence avec docker-compose : OpenShift n'a pas de "driver de logs" qui pousse les lignes vers Fluent Bit.
+# Le moteur de conteneurs (CRI-O) écrit la sortie de chaque pod dans un fichier du nœud :
+#   /var/log/pods/<namespace>_<pod>_<uid>/<conteneur>/0.log
+# Fluent Bit tourne en DaemonSet (un pod par nœud) et lit ces fichiers.
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: fluent-bit
+  labels:
+    app: fluent-bit
+---
+# Autorise ce compte à utiliser la SCC "privileged" : lire les fichiers de logs du nœud demande d'être root,
+# de monter un dossier du nœud (hostPath) et de passer les contrôles SELinux.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: fluent-bit-privileged
+  labels:
+    app: fluent-bit
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:openshift:scc:privileged
+subjects:
+  - kind: ServiceAccount
+    name: fluent-bit
+---
+# Adaptée de observability/fluent-bit/ : seule l'entrée change (fichiers du nœud au lieu du driver Docker).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluent-bit-config
+  labels:
+    app: fluent-bit
+data:
+  fluent-bit.yaml: |
+    service:
+      flush: 1
+      log_level: info
+      parsers_file: parsers.yaml
+
+    pipeline:
+      inputs:
+        # Uniquement les 3 services Spring du projet spring-ms : pas les logs de Fluent Bit ou d'OpenSearch
+        # (Fluent Bit lirait ses propres messages en boucle), ni ceux des pods de build (sortie de Maven).
+        - name: tail
+          path: /var/log/pods/spring-ms_frontend-*/*/*.log,/var/log/pods/spring-ms_user-service-*/*/*.log,/var/log/pods/spring-ms_notification-service-*/*/*.log
+          exclude_path: /var/log/pods/*-build_*/*/*.log
+          # Format des fichiers CRI-O : "<heure> stdout F <ligne>". Le parser cri en extrait la ligne dans "log".
+          multiline.parser: cri
+          # Chemin du fichier lu : identifie le pod pour les lignes qui ne sont pas du JSON
+          path_key: log_file
+          # Position de lecture de chaque fichier, conservée sur le nœud : pas de doublons après un redémarrage
+          db: /var/lib/fluent-bit/positions.db
+          read_from_head: true
+          refresh_interval: 5
+          mem_buf_limit: 10MB
+          skip_long_lines: on
+
+      filters:
+        # Identiques à docker-compose : la ligne brute est renommée, car le JSON ECS contient lui-même un objet "log"
+        - name: modify
+          match: '*'
+          rename: log raw_log
+
+        - name: parser
+          match: '*'
+          key_name: raw_log
+          parser: spring-ecs
+          reserve_data: on
+
+        - name: modify
+          match: '*'
+          condition: Key_does_not_exist message
+          rename: raw_log message
+
+      outputs:
+        # Un index par jour : logs-AAAA.MM.JJ
+        - name: opensearch
+          match: '*'
+          host: opensearch
+          port: 9200
+          logstash_format: on
+          logstash_prefix: logs
+          suppress_type_name: on
+          trace_error: on
+
+  parsers.yaml: |
+    parsers:
+      - name: spring-ecs
+        format: json
+        time_key: '@timestamp'
+        time_format: '%Y-%m-%dT%H:%M:%S.%LZ'
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: fluent-bit
+  labels:
+    app: fluent-bit
+spec:
+  selector:
+    matchLabels:
+      app: fluent-bit
+  template:
+    metadata:
+      labels:
+        app: fluent-bit
+    spec:
+      serviceAccountName: fluent-bit
+      containers:
+        - name: fluent-bit
+          image: docker.io/fluent/fluent-bit:5.1.4
+          args: ["-c", "/fluent-bit/etc/fluent-bit.yaml"]
+          securityContext:
+            privileged: true         # permis par la SCC "privileged"
+            runAsUser: 0
+          resources:
+            limits:
+              memory: 128Mi
+          volumeMounts:
+            - name: config
+              mountPath: /fluent-bit/etc
+            - name: pod-logs
+              mountPath: /var/log/pods
+              readOnly: true
+            - name: state
+              mountPath: /var/lib/fluent-bit
+      volumes:
+        - name: config
+          configMap:
+            name: fluent-bit-config
+        # Dossiers du nœud
+        - name: pod-logs
+          hostPath:
+            path: /var/log/pods
+        - name: state
+          hostPath:
+            path: /var/lib/fluent-bit
+            type: DirectoryOrCreate

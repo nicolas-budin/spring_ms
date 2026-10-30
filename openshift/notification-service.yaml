@@ -69,6 +69,9 @@ spec:
               value: rabbitmq        # le nom du Service RabbitMQ
             - name: SERVER_FORWARD_HEADERS_STRATEGY
               value: framework       # la Route est en HTTPS : Spring lit X-Forwarded-Proto
+            # Logs en JSON (format ECS) : Fluent Bit les décode pour OpenSearch
+            - name: LOGGING_STRUCTURED_FORMAT_CONSOLE
+              value: ecs
           # Le pod ne reçoit du trafic qu'une fois Spring démarré
           readinessProbe:
             httpGet:
