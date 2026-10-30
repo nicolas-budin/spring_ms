@@ -195,9 +195,14 @@ data:
       sleep 5
     done
 
+    # Liste des champs des index logs-* (ce que fait le bouton « rafraîchir les champs » de l'interface).
+    # L'index pattern l'enregistre sous forme de texte JSON : on garde le tableau et on échappe \ et ".
+    FIELDS=$(curl -sf "$DASHBOARDS/api/index_patterns/_fields_for_wildcard?pattern=logs-*" \
+      | sed -e 's/^{"fields"://' -e 's/}$//' -e 's/\\/\\\\/g' -e 's/"/\\"/g')
+
     curl -sf -X POST "$DASHBOARDS/api/saved_objects/index-pattern/logs?overwrite=true" \
       -H 'osd-xsrf: true' -H 'Content-Type: application/json' \
-      -d '{"attributes": {"title": "logs-*", "timeFieldName": "@timestamp"}}' > /dev/null
+      -d "{\"attributes\": {\"title\": \"logs-*\", \"timeFieldName\": \"@timestamp\", \"fields\": \"$FIELDS\"}}" > /dev/null
 
     curl -sf -X POST "$DASHBOARDS/api/opensearch-dashboards/settings" \
       -H 'osd-xsrf: true' -H 'Content-Type: application/json' \
